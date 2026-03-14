@@ -1,0 +1,34 @@
+[project]
+name = "ev-platform"
+version = "0.1.0"
+description = "EV Charging Infrastructure Backend Platform"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "pydantic",
+    "redis",
+    "python-jose",
+    "passlib[bcrypt]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+    "ruff",
+    "black",
+]
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 88
