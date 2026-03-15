@@ -3,6 +3,11 @@ from datetime import datetime
 from uuid import UUID, uuid4
 from typing import Optional
 
+from app.domain.exceptions import (
+    SessionAlreadyStoppedError,
+    InvalidEnergyValueError,
+)
+
 
 @dataclass
 class ChargingSession:
@@ -24,9 +29,13 @@ class ChargingSession:
 
     def stop(self, energy_kwh: float):
         if self.ended_at is not None:
-            raise ValueError("Session already stopped")
+            raise SessionAlreadyStoppedError(
+                f"Session {self.id} has already been stopped."
+            )
         if energy_kwh < 0:
-            raise ValueError("Energy cannot be negative")
+            raise InvalidEnergyValueError(
+                f"Energy value cannot be negative. Got: {energy_kwh}"
+            )
         self.ended_at = datetime.utcnow()
         self.energy_kwh = energy_kwh
 

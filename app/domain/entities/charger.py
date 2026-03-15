@@ -2,6 +2,11 @@ from dataclasses import dataclass
 from enum import Enum
 from uuid import UUID, uuid4
 
+from app.domain.exceptions import (
+    ChargerNotAvailableError,
+    ChargerNotChargingError,
+)
+
 
 class ChargerStatus(str, Enum):
     AVAILABLE = "available"
@@ -27,12 +32,16 @@ class Charger:
 
     def start_charging(self):
         if self.status != ChargerStatus.AVAILABLE:
-            raise ValueError("Charger not available")
+            raise ChargerNotAvailableError(
+                f"Charger {self.id} is not available. Current status: {self.status}"
+            )
         self.status = ChargerStatus.CHARGING
 
     def stop_charging(self):
         if self.status != ChargerStatus.CHARGING:
-            raise ValueError("Charger is not charging")
+            raise ChargerNotChargingError(
+                f"Charger {self.id} is not charging. Current status: {self.status}"
+            )
         self.status = ChargerStatus.AVAILABLE
 
     def mark_offline(self):
