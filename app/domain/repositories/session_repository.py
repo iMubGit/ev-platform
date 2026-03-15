@@ -13,12 +13,16 @@ class SessionRepository(ABC):
         pass
 
     @abstractmethod
-    async def list_by_charger(self, charger_id: UUID) -> List[ChargingSession]:
+    async def list_by_charger(
+        self, charger_id: UUID, limit: int = 100, offset: int = 0
+    ) -> List[ChargingSession]:
         """Retrieve all sessions for a charger."""
         pass
 
     @abstractmethod
-    async def list_by_user(self, user_id: UUID) -> List[ChargingSession]:
+    async def list_by_user(
+        self, user_id: UUID, limit: int = 100, offset: int = 0
+    ) -> List[ChargingSession]:
         """Retrieve all sessions for a user."""
         pass
 

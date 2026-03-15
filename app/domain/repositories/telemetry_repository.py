@@ -13,7 +13,9 @@ class TelemetryRepository(ABC):
         pass
 
     @abstractmethod
-    async def list_by_charger(self, charger_id: UUID) -> List[TelemetryEvent]:
+    async def list_by_charger(
+        self, charger_id: UUID, limit: int = 100, offset: int = 0
+    ) -> List[TelemetryEvent]:
         """Retrieve telemetry history for a charger."""
         pass
 

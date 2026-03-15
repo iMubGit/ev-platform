@@ -18,7 +18,7 @@ class ChargerRepository(ABC):
         pass
 
     @abstractmethod
-    async def list_all(self) -> List[Charger]:
+    async def list_all(self, limit: int = 100, offset: int = 0) -> List[Charger]:
         """List all chargers in the system."""
         pass
 
