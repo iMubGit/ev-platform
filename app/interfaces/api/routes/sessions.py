@@ -5,6 +5,7 @@ from app.core.dependencies import (
     get_start_charging_use_case,
     get_stop_charging_use_case,
 )
+from app.interfaces.api.dependencies import get_current_user
 from app.application.use_cases import (
     StartChargingUseCase,
     StartChargingInput,
@@ -31,12 +32,13 @@ router = APIRouter(prefix="/sessions", tags=["Sessions"])
 async def start_session(
     request: StartSessionRequest,
     use_case: StartChargingUseCase = Depends(get_start_charging_use_case),
+    current_user: str = Depends(get_current_user),
 ):
     try:
         result = await use_case.execute(
             StartChargingInput(
                 charger_id=request.charger_id,
-                user_id=request.user_id,
+                user_id=UUID(current_user),
             )
         )
         return SessionResponse(
@@ -55,6 +57,7 @@ async def stop_session(
     session_id: UUID,
     request: StopSessionRequest,
     use_case: StopChargingUseCase = Depends(get_stop_charging_use_case),
+    current_user: str = Depends(get_current_user),
 ):
     try:
         result = await use_case.execute(

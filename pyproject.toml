@@ -9,9 +9,11 @@ dependencies = [
     "sqlalchemy",
     "psycopg2-binary",
     "pydantic",
+    "pydantic-settings",
     "redis",
-    "python-jose",
+    "python-jose[cryptography]",
     "passlib[bcrypt]",
+    "bcrypt==4.0.1",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 88
