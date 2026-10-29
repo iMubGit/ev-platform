@@ -115,7 +115,7 @@ async def test_stop_charging_success(start_use_case, stop_use_case, charger_repo
 
 @pytest.mark.asyncio
 async def test_stop_charging_rejects_another_users_session(
-    start_use_case, stop_use_case, charger_repo
+    start_use_case, stop_use_case, charger_repo, session_repo
 ):
     charger = Charger.create("SN-SEC-001", "Osogbo")
     await charger_repo.save(charger)
@@ -134,6 +134,12 @@ async def test_stop_charging_rejects_another_users_session(
                 energy_kwh=12.5,
             )
         )
+
+    # A rejected request must leave the owner's session and charger untouched.
+    session = await session_repo.get_by_id(start_result.session_id)
+    assert session is not None
+    assert session.ended_at is None
+    assert charger.status.value == "charging"
 
 
 @pytest.mark.asyncio
