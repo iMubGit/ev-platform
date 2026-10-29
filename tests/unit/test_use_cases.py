@@ -98,21 +98,53 @@ async def test_start_charging_charger_not_available(start_use_case, charger_repo
 async def test_stop_charging_success(start_use_case, stop_use_case, charger_repo):
     charger = Charger.create("SN-001", "Lagos Island")
     await charger_repo.save(charger)
+    owner_id = uuid4()
     start_result = await start_use_case.execute(
-        StartChargingInput(charger_id=charger.id, user_id=uuid4())
+        StartChargingInput(charger_id=charger.id, user_id=owner_id)
     )
     stop_result = await stop_use_case.execute(
-        StopChargingInput(session_id=start_result.session_id, energy_kwh=12.5)
+        StopChargingInput(
+            session_id=start_result.session_id,
+            user_id=owner_id,
+            energy_kwh=12.5,
+        )
     )
     assert stop_result.energy_kwh == 12.5
     assert stop_result.duration_minutes >= 0
 
 
 @pytest.mark.asyncio
+async def test_stop_charging_rejects_another_users_session(
+    start_use_case, stop_use_case, charger_repo
+):
+    charger = Charger.create("SN-SEC-001", "Osogbo")
+    await charger_repo.save(charger)
+
+    owner_id = uuid4()
+    other_user_id = uuid4()
+    start_result = await start_use_case.execute(
+        StartChargingInput(charger_id=charger.id, user_id=owner_id)
+    )
+
+    with pytest.raises(SessionNotFoundError):
+        await stop_use_case.execute(
+            StopChargingInput(
+                session_id=start_result.session_id,
+                user_id=other_user_id,
+                energy_kwh=12.5,
+            )
+        )
+
+
+@pytest.mark.asyncio
 async def test_stop_charging_session_not_found(stop_use_case):
     with pytest.raises(SessionNotFoundError):
         await stop_use_case.execute(
-            StopChargingInput(session_id=uuid4(), energy_kwh=10.0)
+            StopChargingInput(
+                session_id=uuid4(),
+                user_id=uuid4(),
+                energy_kwh=10.0,
+            )
         )
 
 
