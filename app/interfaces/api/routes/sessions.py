@@ -63,6 +63,7 @@ async def stop_session(
         result = await use_case.execute(
             StopChargingInput(
                 session_id=session_id,
+                user_id=UUID(current_user),
                 energy_kwh=request.energy_kwh,
             )
         )
