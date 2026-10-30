@@ -182,15 +182,12 @@ class FakeRedis:
 
 
 @pytest.mark.asyncio
-async def test_login_is_rate_limited_after_five_attempts(client, monkeypatch):
-    from app.core import rate_limit
+async def test_login_requires_captcha_instead_of_locking_username_ip_pair(
+    client, monkeypatch
+):
+    from app.interfaces.api.routes import auth
 
     FakeRedis.counters = {}
-    monkeypatch.setattr(
-        rate_limit.Redis,
-        "from_url",
-        lambda *args, **kwargs: FakeRedis(),
-    )
     monkeypatch.setattr(
         settings,
         "admin_password_hash",
@@ -204,11 +201,91 @@ async def test_login_is_rate_limited_after_five_attempts(client, monkeypatch):
         )
         assert response.status_code == 401
 
-    blocked = await client.post(
+    challenge = await client.post(
         "/auth/token",
         json={"username": settings.admin_username, "password": "wrong"},
     )
+    assert challenge.status_code == 403
+    assert challenge.json()["detail"]["code"] == "captcha_required"
 
+    async def accept_test_token(token, remote_ip=None):
+        return token == "valid-test-token"
+
+    monkeypatch.setattr(auth, "verify_turnstile_token", accept_test_token)
+    login = await client.post(
+        "/auth/token",
+        json={
+            "username": settings.admin_username,
+            "password": "Correct-unit-test-password-42!",
+            "captcha_token": "valid-test-token",
+        },
+    )
+
+    assert login.status_code == 200
+    assert "access_token" in login.json()
+
+
+@pytest.mark.asyncio
+async def test_invalid_captcha_does_not_allow_login(client, monkeypatch):
+    from app.interfaces.api.routes import auth
+
+    FakeRedis.counters = {}
+    monkeypatch.setattr(
+        settings,
+        "admin_password_hash",
+        hash_password("Correct-unit-test-password-42!"),
+    )
+
+    for _ in range(5):
+        await client.post(
+            "/auth/token",
+            json={"username": settings.admin_username, "password": "wrong"},
+        )
+
+    async def reject_test_token(token, remote_ip=None):
+        return False
+
+    monkeypatch.setattr(auth, "verify_turnstile_token", reject_test_token)
+    response = await client.post(
+        "/auth/token",
+        json={
+            "username": settings.admin_username,
+            "password": "Correct-unit-test-password-42!",
+            "captcha_token": "invalid-test-token",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "captcha_failed"
+
+
+@pytest.mark.asyncio
+async def test_ip_limit_still_applies_after_captcha(client, monkeypatch):
+    from app.interfaces.api.routes import auth
+
+    FakeRedis.counters = {}
+    monkeypatch.setattr(
+        settings,
+        "admin_password_hash",
+        hash_password("Correct-unit-test-password-42!"),
+    )
+
+    async def accept_test_token(token, remote_ip=None):
+        return True
+
+    monkeypatch.setattr(auth, "verify_turnstile_token", accept_test_token)
+
+    for index in range(20):
+        response = await client.post(
+            "/auth/token",
+            json={"username": f"unknown-{index}", "password": "wrong"},
+        )
+        assert response.status_code == 401
+
+    blocked = await client.post(
+        "/auth/token",
+        json={"username": "another-unknown", "password": "wrong"},
+    )
     assert blocked.status_code == 429
     assert blocked.headers["retry-after"] == "900"
 
