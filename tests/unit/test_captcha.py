@@ -79,3 +79,16 @@ async def test_turnstile_fails_closed_when_secret_is_missing(monkeypatch):
         await captcha.verify_turnstile_token("one-time-token")
 
     assert error.value.status_code == 503
+
+@pytest.mark.parametrize("error_code", ["timeout-or-duplicate", "invalid-input-response"])
+@pytest.mark.asyncio
+async def test_turnstile_rejects_stale_token(monkeypatch, error_code):
+    monkeypatch.setattr(settings, "turnstile_secret_key", "test-secret")
+    monkeypatch.setattr(settings, "turnstile_expected_hostname", None)
+    monkeypatch.setattr(captcha.httpx, "AsyncClient", MockAsyncClient)
+    MockAsyncClient.response_payload = {
+        "success": False,
+        "error-codes": [error_code],
+    }
+
+    assert await captcha.verify_turnstile_token("stale-token") is False
