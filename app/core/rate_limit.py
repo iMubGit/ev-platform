@@ -68,7 +68,7 @@ def _username_failure_key(username: str) -> str:
     return f"ev-platform:login:username-failed:{username_digest}"
 
 
-async def consume_login_attempt(request: Request, username: str) -> None:
+async def consume_login_attempt(request: Request, username: str) -> bool:
     ip_key, identity_key = _login_keys(request, username)
 
     try:
@@ -93,17 +93,21 @@ async def consume_login_attempt(request: Request, username: str) -> None:
         ) from exc
 
     ip_count, identity_count = (int(count) for count in counts)
-    if (
-        ip_count > settings.login_rate_limit_per_ip
-        or identity_count > settings.login_rate_limit_per_identity
-    ):
+    # Do not lock a username/IP pair: require a CAPTCHA after repeated attempts.
+    # Only the source IP has a hard temporary limit.
+    if ip_count > settings.login_rate_limit_per_ip:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many login attempts. Try again later.",
+            detail="Too many login attempts from this IP. Try again later.",
             headers={
                 "Retry-After": str(settings.login_rate_limit_window_seconds)
             },
         )
+
+    return (
+        identity_count > settings.login_rate_limit_per_identity
+        or ip_count > settings.login_captcha_ip_threshold
+    )
 
 
 async def clear_login_attempts(request: Request, username: str) -> None:
