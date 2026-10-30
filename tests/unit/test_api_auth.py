@@ -315,8 +315,6 @@ async def test_captcha_verified_attempts_have_a_separate_ip_limit(
     client, monkeypatch
 ):
     from app.interfaces.api.routes import auth
-    from app.core import rate_limit
-
     FakeRedis.counters = {}
     monkeypatch.setattr(
         settings,
@@ -363,12 +361,6 @@ async def test_captcha_verified_attempts_have_a_separate_ip_limit(
     assert limited.status_code == 429
     assert limited.headers["retry-after"] == "3600"
 
-    verified_key = (
-        "ev-platform:login:captcha-verified:"
-        + rate_limit._ip_digest(
-            __import__("starlette.requests", fromlist=["Request"]).Request
-        )
-    ) if False else None
 
 
 @pytest.mark.asyncio
