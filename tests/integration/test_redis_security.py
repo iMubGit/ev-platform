@@ -68,7 +68,7 @@ async def test_real_redis_enforces_login_rules_and_preserves_shared_ip_history(
 
         async with Redis.from_url(redis_url, decode_responses=True) as redis:
             assert int(await redis.get(ip_key)) == 21
-            assert int(await redis.get(identity_key)) == 21
+            assert int(await redis.get(identity_key)) == 1
             assert 0 < await redis.ttl(ip_key) <= 900
             assert 0 < await redis.ttl(identity_key) <= 900
 
