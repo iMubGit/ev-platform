@@ -7,7 +7,11 @@ from app.core.config import settings
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 
-async def verify_turnstile_token(token: str, remote_ip: str | None = None) -> bool:
+async def verify_turnstile_token(
+    token: str,
+    remote_ip: str | None = None,
+    expected_action: str = "login",
+) -> bool:
     """Verify a single-use Turnstile token with Cloudflare."""
     if not settings.turnstile_secret_key:
         raise HTTPException(
@@ -42,8 +46,9 @@ async def verify_turnstile_token(token: str, remote_ip: str | None = None) -> bo
     if result.get("success") is not True:
         return False
 
-    # The client must create the widget with action="login".
-    if result.get("action") != "login":
+    # Login uses "login"; integration tests may verify Cloudflare's documented
+    # test-key response, whose action is "test".
+    if result.get("action") != expected_action:
         return False
 
     expected_hostname = settings.turnstile_expected_hostname
