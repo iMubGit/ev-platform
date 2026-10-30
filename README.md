@@ -161,7 +161,7 @@ Missing, invalid, expired, or malformed bearer tokens receive HTTP 401. Login re
 pytest tests/unit/ -v
 ```
 
-The tests cover domain rules, use cases, and API authentication boundaries.
+The unit tests cover domain rules, use cases, and API authentication boundaries. GitHub Actions also runs `tests/integration/` against a real Redis 7 service and Cloudflare's official Turnstile test keys. The Redis test exercises the real Lua counters and expiry windows. Cloudflare's dummy success response does not include the required `action="login"`, so the integration test confirms that Siteverify is reachable but that a dummy token is still rejected by the login verifier. A final successful login-action test requires a real Turnstile widget/sitekey and browser-generated token; the repository does not yet contain a login frontend.
 
 ## Known limitations
 
