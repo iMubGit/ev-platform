@@ -73,7 +73,7 @@ Before starting the API, edit `.env`:
 
 The API will not start without a `SECRET_KEY` of at least 32 characters. Login returns 503 until an administrator password hash is configured. Do not commit `.env`.
 
-Redis must also be running for login protection. By default, the API allows up to 5 attempts for the same username/IP combination and 20 attempts from one IP address within a 15-minute window. These limits count all attempts and reset after a successful login. The platform also records failed credentials by username and across the whole platform. Reaching the default username alert threshold of 5 or global alert threshold of 500 writes a warning to the application log; these monitoring counters do not block other users or freeze an account. A CAPTCHA or risk-based challenge is not integrated yet and must be added with a chosen provider and login client before production use. When an IP-based limit is reached, the API returns HTTP 429 with a retry delay. If Redis is unavailable, login fails with HTTP 503 rather than bypassing the protection. Configure `REDIS_URL` and the `LOGIN_RATE_LIMIT_*` settings in `.env` as needed.
+Redis must also be running for login protection. By default, the API asks for a CAPTCHA after more than 5 attempts for the same username/IP combination, or after more than 10 attempts from one IP, within a 15-minute window. These counters count all attempts and reset after a successful login. The API does not lock a username/IP pair: after the CAPTCHA threshold, the client must send a verified Turnstile token with the login request. An IP is temporarily rate-limited after more than 20 attempts in the window; the API returns HTTP 429 with a retry delay. Failed credentials are also counted by username and across the platform for monitoring only. Reaching the default username alert threshold of 5 or global alert threshold of 500 writes a warning to the application log; these monitoring counters do not freeze accounts or block other users. Configure `TURNSTILE_SECRET_KEY` on the backend. The future browser client must use a public Turnstile site key, create the widget with action `login`, and send its response as `captcha_token` in the `/auth/token` JSON body. The site key is not a backend secret; the secret key must never be exposed to the client or committed to Git. If a CAPTCHA is required but the backend secret is missing, or Cloudflare cannot be reached, login fails with HTTP 503 rather than bypassing verification. If the token is missing or invalid, the API returns HTTP 403. Optionally set `TURNSTILE_EXPECTED_HOSTNAME` to enforce the expected hostname. Configure `REDIS_URL` and the `LOGIN_RATE_LIMIT_*` settings in `.env` as needed.
 
 Start the API:
 
@@ -143,7 +143,7 @@ curl -X POST http://127.0.0.1:8000/sessions/<session-uuid>/stop \
 
 | Method | Endpoint | Description | Auth |
 |---|---|---|---|
-| POST | `/auth/token` | Obtain JWT token | No |
+| POST | `/auth/token` | Obtain JWT token (Turnstile required after suspicious activity) | No |
 | POST | `/chargers/` | Register charger | Yes |
 | GET | `/chargers/` | List chargers | Yes |
 | GET | `/chargers/{id}` | Get charger details | Yes |
@@ -153,7 +153,7 @@ curl -X POST http://127.0.0.1:8000/sessions/<session-uuid>/stop \
 | POST | `/telemetry/` | Ingest telemetry | Yes |
 | GET | `/health` | Health check | No |
 
-Missing, invalid, expired, or malformed bearer tokens receive HTTP 401. Login attempts are rate-limited using Redis; excess attempts receive HTTP 429.
+Missing, invalid, expired, or malformed bearer tokens receive HTTP 401. Login requests may receive HTTP 403 when a Turnstile challenge is required or fails; excessive requests from one IP receive HTTP 429.
 
 ## Tests
 
