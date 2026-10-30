@@ -9,7 +9,7 @@ from app.domain.exceptions import (
 
 app = FastAPI(
     title="EV Platform API",
-    description="Production-grade EV Charging Infrastructure Backend",
+    description="Prototype API for EV charger and charging-session management.",
     version="0.1.0",
 )
 
