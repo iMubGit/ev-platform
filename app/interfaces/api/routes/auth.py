@@ -1,18 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.core.security import create_access_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# Hardcoded demo user for now
-# In production this would query a user repository
-DEMO_USERS = {
-    "admin": {
-        "user_id": "00000000-0000-0000-0000-000000000001",
-        "hashed_password": "$2b$12$XAS/2OBrU.zkibarEhZ07egSZcPQrX6Uc6RfhC./Dss2flYIjI9yC",
-    }
-}
 
 class LoginRequest(BaseModel):
     username: str
@@ -26,18 +19,21 @@ class TokenResponse(BaseModel):
 
 @router.post("/token", response_model=TokenResponse)
 async def login(request: LoginRequest):
-    user = DEMO_USERS.get(request.username)
-    if not user:
+    # Fail closed: no password is accepted until an admin hash is configured.
+    if not settings.admin_password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Administrator login is not configured",
+        )
+
+    if request.username != settings.admin_username or not verify_password(
+        request.password,
+        settings.admin_password_hash,
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
 
-    if not verify_password(request.password, user["hashed_password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-
-    token = create_access_token(subject=user["user_id"])
+    token = create_access_token(subject=str(settings.admin_user_id))
     return TokenResponse(access_token=token)
