@@ -258,17 +258,25 @@ async def test_global_failed_login_limit_applies_across_usernames(client, monkey
         hash_password("Correct-unit-test-password-42!"),
     )
 
-    for username in ("first", "second", "third"):
-        response = await client.post(
-            "/auth/token",
-            json={"username": username, "password": "wrong"},
-        )
+    for index, username in enumerate(("first", "second", "third"), start=1):
+        async with AsyncClient(
+            transport=ASGITransport(app=app, client=(f"192.0.2.{index}", 12345)),
+            base_url="http://test",
+        ) as ip_client:
+            response = await ip_client.post(
+                "/auth/token",
+                json={"username": username, "password": "wrong"},
+            )
         assert response.status_code == 401
 
-    blocked = await client.post(
-        "/auth/token",
-        json={"username": "fourth", "password": "wrong"},
-    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("192.0.2.4", 12345)),
+        base_url="http://test",
+    ) as new_ip_client:
+        blocked = await new_ip_client.post(
+            "/auth/token",
+            json={"username": "fourth", "password": "wrong"},
+        )
 
     assert blocked.status_code == 429
     assert blocked.headers["retry-after"] == "900"
