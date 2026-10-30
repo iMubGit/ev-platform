@@ -9,6 +9,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # Test-only key. Never reuse this value outside CI.
+      SECRET_KEY: "ci-only-secret-key-for-tests-not-for-production-42"
 
     steps:
       - name: Checkout code
