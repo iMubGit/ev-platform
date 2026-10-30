@@ -516,3 +516,52 @@ async def test_username_failure_monitor_counts_across_different_ips(
         assert response.status_code == 401
 
     assert FakeRedis.counters[rate_limit._username_failure_key("admin")] == 3
+
+@pytest.mark.asyncio
+async def test_replayed_turnstile_token_is_rejected_on_second_login(client, monkeypatch):
+    from app.interfaces.api.routes import auth
+
+    FakeRedis.counters = {}
+    monkeypatch.setattr(
+        settings,
+        "admin_password_hash",
+        hash_password("Correct-unit-test-password-42!"),
+    )
+    verification_calls = 0
+
+    async def verify_once(token, remote_ip=None):
+        nonlocal verification_calls
+        verification_calls += 1
+        return verification_calls == 1 and token == "one-time-token"
+
+    monkeypatch.setattr(auth, "verify_turnstile_token", verify_once)
+
+    for index in range(20):
+        response = await client.post(
+            "/auth/token",
+            json={"username": f"shared-user-{index}", "password": "wrong"},
+        )
+        assert response.status_code == 401
+
+    first_use = await client.post(
+        "/auth/token",
+        json={
+            "username": "replay-user",
+            "password": "wrong",
+            "captcha_token": "one-time-token",
+        },
+    )
+    assert first_use.status_code == 401
+
+    second_use = await client.post(
+        "/auth/token",
+        json={
+            "username": "replay-user",
+            "password": "wrong",
+            "captcha_token": "one-time-token",
+        },
+    )
+    assert second_use.status_code == 403
+    assert second_use.json()["detail"]["code"] == "captcha_failed"
+    assert verification_calls == 2
+
