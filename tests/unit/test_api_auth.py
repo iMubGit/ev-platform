@@ -2,7 +2,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from uuid import uuid4
 
-from app.core.config import settings
+from pydantic import ValidationError
+
+from app.core.config import Settings, settings
 from app.core.security import hash_password, create_access_token
 from app.main import app
 
@@ -14,6 +16,13 @@ async def client():
         base_url="http://test",
     ) as test_client:
         yield test_client
+
+
+
+
+def test_secret_key_must_be_provided():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
 
 
 PROTECTED_REQUESTS = [
@@ -108,3 +117,16 @@ async def test_login_token_can_access_protected_route(client, monkeypatch):
 
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+@pytest.mark.asyncio
+async def test_login_rejects_wrong_password(client, monkeypatch):
+    password_hash = hash_password("Correct-unit-test-password-42!")
+    monkeypatch.setattr(settings, "admin_password_hash", password_hash)
+
+    response = await client.post(
+        "/auth/token",
+        json={"username": settings.admin_username, "password": "wrong-password"},
+    )
+
+    assert response.status_code == 401
