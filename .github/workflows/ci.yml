@@ -31,3 +31,41 @@ jobs:
       - name: Run tests
         run: |
           pytest tests/unit/ -v
+
+  security-integration:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # Test-only values. These are public dummy credentials, never production secrets.
+      SECRET_KEY: "ci-only-secret-key-for-tests-not-for-production-42"
+      REDIS_URL: "redis://localhost:6379/15"
+      TURNSTILE_TEST_PASS_SECRET: "1x0000000000000000000000000000000AA"
+      TURNSTILE_TEST_FAIL_SECRET: "2x0000000000000000000000000000000AA"
+      TURNSTILE_TEST_DUPLICATE_SECRET: "3x0000000000000000000000000000000AA"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-asyncio
+
+      - name: Check Redis and Cloudflare integration
+        run: pytest tests/integration/ -v
