@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: int = 30
 
+    # Login protection: fixed 15-minute window by default.
+    login_rate_limit_per_identity: int = Field(default=5, ge=1)
+    login_rate_limit_per_ip: int = Field(default=20, ge=1)
+    login_rate_limit_window_seconds: int = Field(default=900, ge=1)
+
     # Login is disabled until an administrator provides a password hash.
     admin_username: str = "admin"
     admin_user_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
