@@ -59,7 +59,4 @@ async def test_cloudflare_siteverify_rejects_already_spent_test_token(monkeypatc
     )
     monkeypatch.setattr(settings, "turnstile_expected_hostname", None)
 
-    assert await captcha.verify_turnstile_token(
-        DUMMY_TOKEN,
-        expected_action="test",
-    ) is False
+    assert await captcha.verify_turnstile_token(DUMMY_TOKEN) is False
