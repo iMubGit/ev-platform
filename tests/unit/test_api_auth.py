@@ -157,7 +157,17 @@ class FakeRedis:
     async def __aexit__(self, exc_type, exc, traceback):
         return False
 
-    async def eval(self, script, number_of_keys, ip_key, identity_key, window):
+    async def get(self, key):
+        return self.counters.get(key)
+
+    async def eval(self, script, number_of_keys, *args):
+        if number_of_keys == 1:
+            key, window = args
+            count = self.counters.get(key, 0) + 1
+            self.counters[key] = count
+            return count
+
+        ip_key, identity_key, window = args
         ip_count = self.counters.get(ip_key, 0) + 1
         identity_count = self.counters.get(identity_key, 0) + 1
         self.counters[ip_key] = ip_count
@@ -229,3 +239,37 @@ async def test_login_fails_closed_when_redis_is_unavailable(client, monkeypatch)
     )
 
     assert response.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_global_failed_login_limit_applies_across_usernames(client, monkeypatch):
+    from app.core import rate_limit
+
+    FakeRedis.counters = {}
+    monkeypatch.setattr(
+        rate_limit.Redis,
+        "from_url",
+        lambda *args, **kwargs: FakeRedis(),
+    )
+    monkeypatch.setattr(settings, "login_rate_limit_global_failed", 3)
+    monkeypatch.setattr(
+        settings,
+        "admin_password_hash",
+        hash_password("Correct-unit-test-password-42!"),
+    )
+
+    for username in ("first", "second", "third"):
+        response = await client.post(
+            "/auth/token",
+            json={"username": username, "password": "wrong"},
+        )
+        assert response.status_code == 401
+
+    blocked = await client.post(
+        "/auth/token",
+        json={"username": "fourth", "password": "wrong"},
+    )
+
+    assert blocked.status_code == 429
+    assert blocked.headers["retry-after"] == "900"
+    assert FakeRedis.counters[rate_limit._GLOBAL_FAILED_KEY] == 3
