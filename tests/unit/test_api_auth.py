@@ -137,3 +137,86 @@ async def test_login_rejects_wrong_password(client, monkeypatch):
     )
 
     assert response.status_code == 401
+
+
+class FakeRedis:
+    counters = {}
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+    async def eval(self, script, number_of_keys, ip_key, identity_key, window):
+        ip_count = self.counters.get(ip_key, 0) + 1
+        identity_count = self.counters.get(identity_key, 0) + 1
+        self.counters[ip_key] = ip_count
+        self.counters[identity_key] = identity_count
+        return [ip_count, identity_count]
+
+    async def delete(self, *keys):
+        for key in keys:
+            self.counters.pop(key, None)
+
+
+@pytest.mark.asyncio
+async def test_login_is_rate_limited_after_five_attempts(client, monkeypatch):
+    from app.core import rate_limit
+
+    FakeRedis.counters = {}
+    monkeypatch.setattr(
+        rate_limit.Redis,
+        "from_url",
+        lambda *args, **kwargs: FakeRedis(),
+    )
+    monkeypatch.setattr(
+        settings,
+        "admin_password_hash",
+        hash_password("Correct-unit-test-password-42!"),
+    )
+
+    for _ in range(5):
+        response = await client.post(
+            "/auth/token",
+            json={"username": settings.admin_username, "password": "wrong"},
+        )
+        assert response.status_code == 401
+
+    blocked = await client.post(
+        "/auth/token",
+        json={"username": settings.admin_username, "password": "wrong"},
+    )
+
+    assert blocked.status_code == 429
+    assert blocked.headers["retry-after"] == "900"
+
+
+@pytest.mark.asyncio
+async def test_login_fails_closed_when_redis_is_unavailable(client, monkeypatch):
+    from app.core import rate_limit
+
+    class UnavailableRedis:
+        async def __aenter__(self):
+            raise ConnectionError("Redis is unavailable")
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+    monkeypatch.setattr(
+        rate_limit.Redis,
+        "from_url",
+        lambda *args, **kwargs: UnavailableRedis(),
+    )
+    monkeypatch.setattr(
+        settings,
+        "admin_password_hash",
+        hash_password("Correct-unit-test-password-42!"),
+    )
+
+    response = await client.post(
+        "/auth/token",
+        json={"username": settings.admin_username, "password": "wrong"},
+    )
+
+    assert response.status_code == 503
