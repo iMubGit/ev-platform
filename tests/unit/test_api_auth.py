@@ -10,7 +10,16 @@ from app.main import app
 
 
 @pytest.fixture
-async def client():
+async def client(monkeypatch):
+    from app.core import rate_limit
+
+    FakeRedis.counters = {}
+    monkeypatch.setattr(
+        rate_limit.Redis,
+        "from_url",
+        lambda *args, **kwargs: FakeRedis(),
+    )
+
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
