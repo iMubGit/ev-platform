@@ -1,22 +1,24 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
+from app.core.captcha import verify_turnstile_token
+from app.core.config import settings
+from app.core.rate_limit import (
+    clear_login_attempts,
+    consume_captcha_verified_attempt,
+    consume_login_attempt,
+    get_client_ip,
+    record_failed_login,
+)
 from app.core.security import create_access_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# Hardcoded demo user for now
-# In production this would query a user repository
-DEMO_USERS = {
-    "admin": {
-        "user_id": "00000000-0000-0000-0000-000000000001",
-        "hashed_password": "$2b$12$XAS/2OBrU.zkibarEhZ07egSZcPQrX6Uc6RfhC./Dss2flYIjI9yC",
-    }
-}
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+    captcha_token: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -25,19 +27,49 @@ class TokenResponse(BaseModel):
 
 
 @router.post("/token", response_model=TokenResponse)
-async def login(request: LoginRequest):
-    user = DEMO_USERS.get(request.username)
-    if not user:
+async def login(request: Request, credentials: LoginRequest):
+    # Apply IP limits and determine whether this request needs a CAPTCHA.
+    captcha_required = await consume_login_attempt(request, credentials.username)
+    if captcha_required:
+        if not credentials.captcha_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "captcha_required",
+                    "message": "Complete the CAPTCHA challenge and retry login.",
+                },
+            )
+
+        client_ip = get_client_ip(request)
+        if not await verify_turnstile_token(credentials.captcha_token, client_ip):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "captcha_failed",
+                    "message": "CAPTCHA verification failed. Please try again.",
+                },
+            )
+
+        # Count only tokens that Cloudflare has verified successfully.
+        await consume_captcha_verified_attempt(request)
+
+    # Fail closed: no password is accepted until an admin hash is configured.
+    if not settings.admin_password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Administrator login is not configured",
+        )
+
+    if credentials.username != settings.admin_username or not verify_password(
+        credentials.password,
+        settings.admin_password_hash,
+    ):
+        await record_failed_login(credentials.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
 
-    if not verify_password(request.password, user["hashed_password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-
-    token = create_access_token(subject=user["user_id"])
+    await clear_login_attempts(request, credentials.username)
+    token = create_access_token(subject=str(settings.admin_user_id))
     return TokenResponse(access_token=token)

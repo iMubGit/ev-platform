@@ -4,8 +4,8 @@ from typing import List
 
 from app.core.dependencies import get_charger_repo
 from app.domain.entities import Charger
-from app.domain.exceptions import ChargerNotFoundError
 from app.infrastructure.database.repositories import InMemoryChargerRepository
+from app.interfaces.api.dependencies import get_current_user
 from app.interfaces.api.schemas import ChargerCreateRequest, ChargerResponse
 
 router = APIRouter(prefix="/chargers", tags=["Chargers"])
@@ -14,6 +14,7 @@ router = APIRouter(prefix="/chargers", tags=["Chargers"])
 @router.post("/", response_model=ChargerResponse, status_code=201)
 async def create_charger(
     request: ChargerCreateRequest,
+    current_user: str = Depends(get_current_user),
     repo: InMemoryChargerRepository = Depends(get_charger_repo),
 ):
     charger = Charger.create(
@@ -33,6 +34,7 @@ async def create_charger(
 async def list_chargers(
     limit: int = 100,
     offset: int = 0,
+    current_user: str = Depends(get_current_user),
     repo: InMemoryChargerRepository = Depends(get_charger_repo),
 ):
     chargers = await repo.list_all(limit=limit, offset=offset)
@@ -50,6 +52,7 @@ async def list_chargers(
 @router.get("/{charger_id}", response_model=ChargerResponse)
 async def get_charger(
     charger_id: UUID,
+    current_user: str = Depends(get_current_user),
     repo: InMemoryChargerRepository = Depends(get_charger_repo),
 ):
     charger = await repo.get_by_id(charger_id)
@@ -66,6 +69,7 @@ async def get_charger(
 @router.delete("/{charger_id}", status_code=204)
 async def delete_charger(
     charger_id: UUID,
+    current_user: str = Depends(get_current_user),
     repo: InMemoryChargerRepository = Depends(get_charger_repo),
 ):
     charger = await repo.get_by_id(charger_id)

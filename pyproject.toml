@@ -11,6 +11,7 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "redis",
+    "httpx",
     "python-jose[cryptography]",
     "passlib[bcrypt]",
     "bcrypt==4.0.1",
@@ -20,7 +21,6 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-asyncio",
-    "httpx",
     "ruff",
     "black",
 ]

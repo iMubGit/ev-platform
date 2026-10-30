@@ -1,4 +1,8 @@
-from pydantic_settings import BaseSettings
+from typing import Literal
+from uuid import UUID
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -6,12 +10,42 @@ class Settings(BaseSettings):
     debug: bool = False
     database_url: str = "sqlite+aiosqlite:///./ev_platform.db"
     redis_url: str = "redis://localhost:6379"
-    secret_key: str = "dev-secret-key-change-in-production"
-    algorithm: str = "HS256"
+
+    # Trust CF-Connecting-IP only when the deployment ingress is confirmed
+    # to be Cloudflare. Otherwise use the direct TCP peer address.
+    trust_cloudflare_client_ip: bool = False
+
+    # Temporary, staging-only diagnostic endpoint. Disabled by default.
+    staging_diagnostics_enabled: bool = False
+    staging_diagnostics_token: str | None = None
+
+    # No built-in signing key: the operator must provide SECRET_KEY.
+    secret_key: str = Field(min_length=32)
+    # Only this explicitly supported signing algorithm is accepted.
+    algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: int = 30
 
-    class Config:
-        env_file = ".env"
+    # Login protection: fixed 15-minute window by default.
+    # After this many attempts for one username/IP pair, require CAPTCHA.
+    login_captcha_identity_threshold: int = Field(default=5, ge=1)
+    login_captcha_ip_threshold: int = Field(default=20, ge=1)
+    # Maximum password checks per IP after a valid CAPTCHA, in a longer window.
+    login_captcha_verified_attempts_per_ip: int = Field(default=30, ge=1)
+    login_captcha_verified_window_seconds: int = Field(default=3600, ge=1)
+    login_rate_limit_username_alert: int = Field(default=5, ge=1)
+    login_rate_limit_global_alert: int = Field(default=500, ge=1)
+    login_rate_limit_window_seconds: int = Field(default=900, ge=1)
+
+    # Login is disabled until an administrator provides a password hash.
+    admin_username: str = "admin"
+    admin_user_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
+    admin_password_hash: str | None = None
+
+    # Cloudflare Turnstile secret is backend-only. The site key belongs in the client.
+    turnstile_secret_key: str | None = None
+    turnstile_expected_hostname: str | None = None
+
+    model_config = SettingsConfigDict(env_file=".env")
 
 
 settings = Settings()
