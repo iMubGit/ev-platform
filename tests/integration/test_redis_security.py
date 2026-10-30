@@ -43,7 +43,7 @@ async def test_real_redis_enforces_login_rules_and_preserves_shared_ip_history(
     octet = uuid.uuid4().int % 250 + 1
     request = _request_for_ip(f"198.18.0.{octet}")
     username = f"integration-{uuid.uuid4().hex}"
-    ip_key, identity_key = rate_limit._login_keys(request, username)
+    ip_key, identity_key = rate_limit._login_keys(request, f"{username}-0")
     verified_key = (
         f"ev-platform:login:captcha-verified:{rate_limit._ip_digest(request)}"
     )
@@ -54,9 +54,17 @@ async def test_real_redis_enforces_login_rules_and_preserves_shared_ip_history(
     try:
         # The real Lua script increments both keys atomically in Redis.
         for attempt in range(20):
-            assert await rate_limit.consume_login_attempt(request, username) is False
+            assert (
+                await rate_limit.consume_login_attempt(
+                    request, f"{username}-{attempt}"
+                )
+                is False
+            )
 
-        assert await rate_limit.consume_login_attempt(request, username) is True
+        assert (
+            await rate_limit.consume_login_attempt(request, f"{username}-20")
+            is True
+        )
 
         async with Redis.from_url(redis_url, decode_responses=True) as redis:
             assert int(await redis.get(ip_key)) == 21
@@ -65,7 +73,7 @@ async def test_real_redis_enforces_login_rules_and_preserves_shared_ip_history(
             assert 0 < await redis.ttl(identity_key) <= 900
 
         # Successful login cleanup must preserve the shared IP counter.
-        await rate_limit.clear_login_attempts(request, username)
+        await rate_limit.clear_login_attempts(request, f"{username}-0")
         async with Redis.from_url(redis_url, decode_responses=True) as redis:
             assert await redis.get(ip_key) == "21"
             assert await redis.get(identity_key) is None
