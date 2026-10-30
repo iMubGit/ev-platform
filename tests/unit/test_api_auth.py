@@ -260,7 +260,9 @@ async def test_invalid_captcha_does_not_allow_login(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ip_limit_still_applies_after_captcha(client, monkeypatch):
+async def test_ip_threshold_requires_captcha_instead_of_blocking_shared_ip(
+    client, monkeypatch
+):
     from app.interfaces.api.routes import auth
 
     FakeRedis.counters = {}
@@ -271,23 +273,35 @@ async def test_ip_limit_still_applies_after_captcha(client, monkeypatch):
     )
 
     async def accept_test_token(token, remote_ip=None):
-        return True
+        return token == "fresh-valid-token"
 
     monkeypatch.setattr(auth, "verify_turnstile_token", accept_test_token)
 
+    # Different usernames model legitimate users sharing one public IP.
     for index in range(20):
         response = await client.post(
             "/auth/token",
-            json={"username": f"unknown-{index}", "password": "wrong", "captcha_token": "accepted-test-token"},
+            json={"username": f"user-{index}", "password": "wrong"},
         )
         assert response.status_code == 401
 
-    blocked = await client.post(
+    challenge = await client.post(
         "/auth/token",
-        json={"username": "another-unknown", "password": "wrong"},
+        json={"username": "user-20", "password": "wrong"},
     )
-    assert blocked.status_code == 429
-    assert blocked.headers["retry-after"] == "900"
+    assert challenge.status_code == 403
+    assert challenge.json()["detail"]["code"] == "captcha_required"
+
+    # A valid challenge permits this one request to reach password checking.
+    verified_attempt = await client.post(
+        "/auth/token",
+        json={
+            "username": "user-20",
+            "password": "wrong",
+            "captcha_token": "fresh-valid-token",
+        },
+    )
+    assert verified_attempt.status_code == 401
 
 
 @pytest.mark.asyncio
