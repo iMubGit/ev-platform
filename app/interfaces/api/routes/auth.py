@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
+from app.core.captcha import verify_turnstile_token
 from app.core.config import settings
 from app.core.rate_limit import (
     clear_login_attempts,
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 class LoginRequest(BaseModel):
     username: str
     password: str
+    captcha_token: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -24,8 +26,27 @@ class TokenResponse(BaseModel):
 
 @router.post("/token", response_model=TokenResponse)
 async def login(request: Request, credentials: LoginRequest):
-    # Apply IP and IP/username limits before checking the password.
-    await consume_login_attempt(request, credentials.username)
+    # Apply IP limits and determine whether this request needs a CAPTCHA.
+    captcha_required = await consume_login_attempt(request, credentials.username)
+    if captcha_required:
+        if not credentials.captcha_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "captcha_required",
+                    "message": "Complete the CAPTCHA challenge and retry login.",
+                },
+            )
+
+        client_ip = request.client.host if request.client else None
+        if not await verify_turnstile_token(credentials.captcha_token, client_ip):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "captcha_failed",
+                    "message": "CAPTCHA verification failed. Please try again.",
+                },
+            )
 
     # Fail closed: no password is accepted until an admin hash is configured.
     if not settings.admin_password_hash:
