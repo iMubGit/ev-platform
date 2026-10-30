@@ -92,3 +92,28 @@ async def test_turnstile_rejects_stale_token(monkeypatch, error_code):
     }
 
     assert await captcha.verify_turnstile_token("stale-token") is False
+
+@pytest.mark.asyncio
+async def test_turnstile_fails_closed_when_cloudflare_is_unavailable(monkeypatch):
+    monkeypatch.setattr(settings, "turnstile_secret_key", "test-secret")
+
+    class UnavailableClient:
+        def __init__(self, timeout):
+            assert timeout == 5.0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, data):
+            request = httpx.Request("POST", url)
+            raise httpx.ConnectError("Cloudflare unavailable", request=request)
+
+    monkeypatch.setattr(captcha.httpx, "AsyncClient", UnavailableClient)
+
+    with pytest.raises(HTTPException) as error:
+        await captcha.verify_turnstile_token("valid-looking-token")
+
+    assert error.value.status_code == 503
