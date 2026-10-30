@@ -64,7 +64,7 @@ Before starting the API, edit `.env`:
    ```bash
    python -c "import secrets; print(secrets.token_urlsafe(48))"
    ```
-   Put the generated value in `SECRET_KEY`. Keep it private and stable between restarts.
+   Put the generated value in `SECRET_KEY`. Keep it private and stable between restarts. Changing this key invalidates all tokens issued with the previous key.
 2. Generate an administrator password hash:
    ```bash
    python -c "from passlib.context import CryptContext; print(CryptContext(schemes=['bcrypt']).hash('YOUR-STRONG-PASSWORD'))"
