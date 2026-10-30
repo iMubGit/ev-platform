@@ -118,12 +118,20 @@ async def test_login_token_can_access_protected_route(client, monkeypatch):
         hash_password(password),
     )
 
+    failed_login = await client.post(
+        "/auth/token",
+        json={"username": settings.admin_username, "password": "wrong-password"},
+    )
+    assert failed_login.status_code == 401
+
     login = await client.post(
         "/auth/token",
         json={"username": settings.admin_username, "password": password},
     )
 
     assert login.status_code == 200
+    from app.core import rate_limit
+    assert FakeRedis.counters[rate_limit._GLOBAL_FAILED_KEY] == 1
     token = login.json()["access_token"]
 
     response = await client.get(
