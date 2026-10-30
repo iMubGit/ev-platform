@@ -278,7 +278,7 @@ async def test_ip_limit_still_applies_after_captcha(client, monkeypatch):
     for index in range(20):
         response = await client.post(
             "/auth/token",
-            json={"username": f"unknown-{index}", "password": "wrong"},
+            json={"username": f"unknown-{index}", "password": "wrong", "captcha_token": "accepted-test-token"},
         )
         assert response.status_code == 401
 
