@@ -1,4 +1,5 @@
 import hashlib
+import ipaddress
 import logging
 
 from fastapi import HTTPException, Request, status
@@ -26,21 +27,46 @@ return {ip_count, identity_count}
 """
 
 
-def _client_ip(request: Request) -> str:
-    # Use the direct connection address. Do not trust client-supplied
-    # X-Forwarded-For headers unless a trusted-proxy setup is added.
-    return request.client.host if request.client else "unknown"
+def get_client_ip(request: Request) -> str:
+    """Return a validated client IP from the configured trusted source.
+
+    Cloudflare mode must only be enabled when the application ingress is
+    guaranteed to pass through Cloudflare's edge. Never trust X-Forwarded-For.
+    """
+    if settings.trust_cloudflare_client_ip:
+        raw_ip = request.headers.get("cf-connecting-ip")
+        if raw_ip is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Client IP cannot be determined securely",
+            )
+    else:
+        raw_ip = request.client.host if request.client else None
+        if raw_ip is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Client IP cannot be determined securely",
+            )
+
+    try:
+        return str(ipaddress.ip_address(raw_ip.strip()))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Client IP cannot be determined securely",
+        ) from exc
 
 
 def _ip_digest(request: Request) -> str:
-    return hashlib.sha256(_client_ip(request).encode("utf-8")).hexdigest()
+    return hashlib.sha256(get_client_ip(request).encode("utf-8")).hexdigest()
 
 
 def _login_keys(request: Request, username: str) -> tuple[str, str]:
     normalized_username = username.strip().casefold()
-    ip_digest = _ip_digest(request)
+    client_ip = get_client_ip(request)
+    ip_digest = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()
     identity_digest = hashlib.sha256(
-        f"{_client_ip(request)}:{normalized_username}".encode("utf-8")
+        f"{client_ip}:{normalized_username}".encode("utf-8")
     ).hexdigest()
 
     return (

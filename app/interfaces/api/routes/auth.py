@@ -7,6 +7,7 @@ from app.core.rate_limit import (
     clear_login_attempts,
     consume_captcha_verified_attempt,
     consume_login_attempt,
+    get_client_ip,
     record_failed_login,
 )
 from app.core.security import create_access_token, verify_password
@@ -39,7 +40,7 @@ async def login(request: Request, credentials: LoginRequest):
                 },
             )
 
-        client_ip = request.client.host if request.client else None
+        client_ip = get_client_ip(request)
         if not await verify_turnstile_token(credentials.captcha_token, client_ip):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

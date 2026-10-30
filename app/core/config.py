@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./ev_platform.db"
     redis_url: str = "redis://localhost:6379"
 
+    # Trust CF-Connecting-IP only when the deployment ingress is confirmed
+    # to be Cloudflare. Otherwise use the direct TCP peer address.
+    trust_cloudflare_client_ip: bool = False
+
     # No built-in signing key: the operator must provide SECRET_KEY.
     secret_key: str = Field(min_length=32)
     # Only this explicitly supported signing algorithm is accepted.
