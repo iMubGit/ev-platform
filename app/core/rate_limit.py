@@ -93,17 +93,8 @@ async def consume_login_attempt(request: Request, username: str) -> bool:
         ) from exc
 
     ip_count, identity_count = (int(count) for count in counts)
-    # Do not lock a username/IP pair: require a CAPTCHA after repeated attempts.
-    # Only the source IP has a hard temporary limit.
-    if ip_count > settings.login_rate_limit_per_ip:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many login attempts from this IP. Try again later.",
-            headers={
-                "Retry-After": str(settings.login_rate_limit_window_seconds)
-            },
-        )
-
+    # Do not hard-lock a shared IP. Require a fresh CAPTCHA after the
+    # configured IP threshold; the caller verifies it before checking a password.
     return (
         identity_count > settings.login_captcha_identity_threshold
         or ip_count > settings.login_captcha_ip_threshold
