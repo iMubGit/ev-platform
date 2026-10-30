@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # After this many attempts for one username/IP pair, require CAPTCHA.
     login_captcha_identity_threshold: int = Field(default=5, ge=1)
     login_captcha_ip_threshold: int = Field(default=20, ge=1)
+    # Maximum password checks per IP after a valid CAPTCHA, in a longer window.
+    login_captcha_verified_attempts_per_ip: int = Field(default=30, ge=1)
+    login_captcha_verified_window_seconds: int = Field(default=3600, ge=1)
     login_rate_limit_username_alert: int = Field(default=5, ge=1)
     login_rate_limit_global_alert: int = Field(default=500, ge=1)
     login_rate_limit_window_seconds: int = Field(default=900, ge=1)
