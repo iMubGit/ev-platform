@@ -169,6 +169,12 @@ class FakeRedis:
         return self.counters.get(key)
 
     async def eval(self, script, number_of_keys, *args):
+        if number_of_keys == 1:
+            key, window = args
+            count = self.counters.get(key, 0) + 1
+            self.counters[key] = count
+            return count
+
         first_key, second_key, window = args
         first_count = self.counters.get(first_key, 0) + 1
         second_count = self.counters.get(second_key, 0) + 1
@@ -302,6 +308,67 @@ async def test_ip_threshold_requires_captcha_instead_of_blocking_shared_ip(
         },
     )
     assert verified_attempt.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_captcha_verified_attempts_have_a_separate_ip_limit(
+    client, monkeypatch
+):
+    from app.interfaces.api.routes import auth
+    from app.core import rate_limit
+
+    FakeRedis.counters = {}
+    monkeypatch.setattr(
+        settings,
+        "admin_password_hash",
+        hash_password("Correct-unit-test-password-42!"),
+    )
+    monkeypatch.setattr(settings, "login_captcha_verified_attempts_per_ip", 2)
+    monkeypatch.setattr(settings, "login_captcha_verified_window_seconds", 3600)
+
+    async def accept_test_token(token, remote_ip=None):
+        return token == "fresh-valid-token"
+
+    monkeypatch.setattr(auth, "verify_turnstile_token", accept_test_token)
+
+    # Cross the normal IP threshold using distinct usernames on one shared IP.
+    for index in range(20):
+        response = await client.post(
+            "/auth/token",
+            json={"username": f"shared-user-{index}", "password": "wrong"},
+        )
+        assert response.status_code == 401
+
+    # Two valid CAPTCHA responses permit two password checks.
+    for index in range(2):
+        response = await client.post(
+            "/auth/token",
+            json={
+                "username": f"captcha-user-{index}",
+                "password": "wrong",
+                "captcha_token": "fresh-valid-token",
+            },
+        )
+        assert response.status_code == 401
+
+    # The third verified attempt is rate-limited before password checking.
+    limited = await client.post(
+        "/auth/token",
+        json={
+            "username": "captcha-user-third",
+            "password": "wrong",
+            "captcha_token": "fresh-valid-token",
+        },
+    )
+    assert limited.status_code == 429
+    assert limited.headers["retry-after"] == "3600"
+
+    verified_key = (
+        "ev-platform:login:captcha-verified:"
+        + rate_limit._ip_digest(
+            __import__("starlette.requests", fromlist=["Request"]).Request
+        )
+    ) if False else None
 
 
 @pytest.mark.asyncio
