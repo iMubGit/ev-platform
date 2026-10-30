@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -20,8 +20,7 @@ class Settings(BaseSettings):
     admin_user_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
     admin_password_hash: str | None = None
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env")
 
 
 settings = Settings()
