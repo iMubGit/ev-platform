@@ -73,7 +73,7 @@ Before starting the API, edit `.env`:
 
 The API will not start without a `SECRET_KEY` of at least 32 characters. Login returns 503 until an administrator password hash is configured. Do not commit `.env`.
 
-Redis must also be running for login protection. By default, the API allows up to 5 login attempts for the same username and IP address, and 20 attempts from one IP address, within a 15-minute window. The limit counts all attempts and resets after a successful login. When the limit is reached, the API returns HTTP 429 with a retry delay. If Redis is unavailable, login fails with HTTP 503 rather than bypassing the protection. Configure `REDIS_URL` and the `LOGIN_RATE_LIMIT_*` settings in `.env` as needed.
+Redis must also be running for login protection. By default, the API allows up to 5 login attempts for the same username and IP address, and 20 attempts from one IP address, within a 15-minute window. These two limits count all attempts and reset after a successful login. Separately, the platform counts failed credential checks across all usernames and IP addresses; after 500 failures in the 15-minute window, further logins are temporarily blocked. Successful logins do not reset this global counter. When a limit is reached, the API returns HTTP 429 with a retry delay. If Redis is unavailable, login fails with HTTP 503 rather than bypassing the protection. Configure `REDIS_URL` and the `LOGIN_RATE_LIMIT_*` settings in `.env` as needed.
 
 Start the API:
 
