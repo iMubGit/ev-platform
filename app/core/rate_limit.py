@@ -1,4 +1,5 @@
 import hashlib
+import logging
 
 from fastapi import HTTPException, Request, status
 from redis.asyncio import Redis
@@ -6,10 +7,11 @@ from redis.exceptions import RedisError
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
 
-# Count all login attempts, not only failed ones. This makes the limit atomic
-# and prevents many simultaneous guesses from bypassing a failed-attempt check.
-_INCREMENT_SCRIPT = """
+
+# Count attempts from an IP and an IP/username pair atomically.
+_INCREMENT_ATTEMPT_SCRIPT = """
 local ip_count = redis.call('INCR', KEYS[1])
 if ip_count == 1 then
     redis.call('EXPIRE', KEYS[1], ARGV[1])
@@ -42,13 +44,28 @@ def _login_keys(request: Request, username: str) -> tuple[str, str]:
 
 
 _GLOBAL_FAILED_KEY = "ev-platform:login:global-failed"
-_GLOBAL_FAILED_SCRIPT = """
-local count = redis.call('INCR', KEYS[1])
-if count == 1 then
+
+
+# Record failed credentials for monitoring only. This script never blocks login.
+_RECORD_FAILURE_SCRIPT = """
+local global_count = redis.call('INCR', KEYS[1])
+if global_count == 1 then
     redis.call('EXPIRE', KEYS[1], ARGV[1])
 end
-return count
+
+local username_count = redis.call('INCR', KEYS[2])
+if username_count == 1 then
+    redis.call('EXPIRE', KEYS[2], ARGV[1])
+end
+
+return {global_count, username_count}
 """
+
+
+def _username_failure_key(username: str) -> str:
+    normalized_username = username.strip().casefold()
+    username_digest = hashlib.sha256(normalized_username.encode("utf-8")).hexdigest()
+    return f"ev-platform:login:username-failed:{username_digest}"
 
 
 async def consume_login_attempt(request: Request, username: str) -> None:
@@ -61,16 +78,8 @@ async def consume_login_attempt(request: Request, username: str) -> None:
             socket_connect_timeout=2,
             socket_timeout=2,
         ) as redis:
-            global_failed = int(await redis.get(_GLOBAL_FAILED_KEY) or 0)
-            if global_failed >= settings.login_rate_limit_global_failed:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many failed login attempts across the platform. Try again later.",
-                    headers={"Retry-After": str(settings.login_rate_limit_window_seconds)},
-                )
-
             counts = await redis.eval(
-                _INCREMENT_SCRIPT,
+                _INCREMENT_ATTEMPT_SCRIPT,
                 2,
                 ip_key,
                 identity_key,
@@ -115,8 +124,8 @@ async def clear_login_attempts(request: Request, username: str) -> None:
         ) from exc
 
 
-async def record_failed_login() -> None:
-    """Record a failed credential check in the platform-wide counter."""
+async def record_failed_login(username: str) -> None:
+    """Record failed credentials for monitoring; this does not lock accounts."""
     try:
         async with Redis.from_url(
             settings.redis_url,
@@ -124,10 +133,11 @@ async def record_failed_login() -> None:
             socket_connect_timeout=2,
             socket_timeout=2,
         ) as redis:
-            await redis.eval(
-                _GLOBAL_FAILED_SCRIPT,
-                1,
+            global_count, username_count = await redis.eval(
+                _RECORD_FAILURE_SCRIPT,
+                2,
                 _GLOBAL_FAILED_KEY,
+                _username_failure_key(username),
                 settings.login_rate_limit_window_seconds,
             )
     except (RedisError, OSError, TimeoutError) as exc:
@@ -135,3 +145,13 @@ async def record_failed_login() -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Login protection is temporarily unavailable",
         ) from exc
+
+    # Log once when each alert threshold is first reached in the time window.
+    if int(username_count) == settings.login_rate_limit_username_alert:
+        logger.warning(
+            "Repeated failed logins for one username; CAPTCHA/risk review may be needed"
+        )
+    if int(global_count) == settings.login_rate_limit_global_alert:
+        logger.warning(
+            "Platform-wide failed-login alert threshold reached; review login activity"
+        )
