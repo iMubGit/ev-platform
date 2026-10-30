@@ -565,3 +565,45 @@ async def test_replayed_turnstile_token_is_rejected_on_second_login(client, monk
     assert second_use.json()["detail"]["code"] == "captcha_failed"
     assert verification_calls == 2
 
+
+@pytest.mark.asyncio
+async def test_cloudflare_outage_blocks_password_check(client, monkeypatch):
+    from fastapi import HTTPException
+    from app.interfaces.api.routes import auth
+
+    FakeRedis.counters = {}
+    monkeypatch.setattr(
+        settings,
+        "admin_password_hash",
+        hash_password("Correct-unit-test-password-42!"),
+    )
+
+    for index in range(20):
+        response = await client.post(
+            "/auth/token",
+            json={"username": f"outage-user-{index}", "password": "wrong"},
+        )
+        assert response.status_code == 401
+
+    async def cloudflare_unavailable(token, remote_ip=None):
+        raise HTTPException(
+            status_code=503,
+            detail="CAPTCHA verification is temporarily unavailable",
+        )
+
+    def password_check_must_not_run(password, password_hash):
+        raise AssertionError("Password check ran without CAPTCHA verification")
+
+    monkeypatch.setattr(auth, "verify_turnstile_token", cloudflare_unavailable)
+    monkeypatch.setattr(auth, "verify_password", password_check_must_not_run)
+
+    response = await client.post(
+        "/auth/token",
+        json={
+            "username": "outage-user-final",
+            "password": "correct-password",
+            "captcha_token": "token-during-outage",
+        },
+    )
+
+    assert response.status_code == 503
