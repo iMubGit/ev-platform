@@ -11,7 +11,7 @@ DUMMY_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
 
 
 @pytest.mark.asyncio
-async def test_cloudflare_siteverify_accepts_official_test_token(monkeypatch):
+async def test_cloudflare_siteverify_responds_but_test_token_cannot_pass_login_action(monkeypatch):
     monkeypatch.setattr(
         settings,
         "turnstile_secret_key",
@@ -32,13 +32,10 @@ async def test_cloudflare_siteverify_accepts_official_test_token(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload.get("success") is True, payload
-    assert payload.get("action") == "test", payload
+    assert payload.get("metadata", {}).get("result_with_testing_key") is True
 
-    # The application's own validator must accept the documented test action.
-    assert await captcha.verify_turnstile_token(
-        DUMMY_TOKEN,
-        expected_action="test",
-    ) is True
+    # A Cloudflare test-key response is not proof of a login-action token.
+    assert await captcha.verify_turnstile_token(DUMMY_TOKEN) is False
 
 
 @pytest.mark.asyncio
