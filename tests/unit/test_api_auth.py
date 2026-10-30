@@ -364,6 +364,57 @@ async def test_captcha_verified_attempts_have_a_separate_ip_limit(
 
 
 @pytest.mark.asyncio
+async def test_successful_login_clears_identity_but_preserves_shared_ip_counter(
+    monkeypatch,
+):
+    from starlette.requests import Request
+    from app.core import rate_limit
+
+    FakeRedis.counters = {}
+    password = "Correct-unit-test-password-42!"
+    monkeypatch.setattr(settings, "admin_password_hash", hash_password(password))
+    ip_client = AsyncClient(
+        transport=ASGITransport(
+            app=app,
+            client=("203.0.113.77", 12345),
+        ),
+        base_url="http://test",
+    )
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/auth/token",
+        "raw_path": b"/auth/token",
+        "query_string": b"",
+        "headers": [],
+        "client": ("203.0.113.77", 12345),
+        "server": ("test", 80),
+    }
+    request = Request(scope)
+    ip_key, identity_key = rate_limit._login_keys(request, settings.admin_username)
+
+    async with ip_client:
+        failed = await ip_client.post(
+            "/auth/token",
+            json={"username": settings.admin_username, "password": "wrong"},
+        )
+        assert failed.status_code == 401
+
+        successful = await ip_client.post(
+            "/auth/token",
+            json={"username": settings.admin_username, "password": password},
+        )
+        assert successful.status_code == 200
+
+    assert FakeRedis.counters[ip_key] == 2
+    assert identity_key not in FakeRedis.counters
+
+
+@pytest.mark.asyncio
 async def test_login_fails_closed_when_redis_is_unavailable(client, monkeypatch):
     from app.core import rate_limit
 
