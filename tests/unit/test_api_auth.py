@@ -18,11 +18,9 @@ async def client():
         yield test_client
 
 
-
-
 def test_secret_key_must_be_provided():
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        Settings(_env_file=None, _env_prefix="TEST_MISSING_SECRET_")
 
 
 PROTECTED_REQUESTS = [
