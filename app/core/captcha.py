@@ -33,6 +33,12 @@ async def verify_turnstile_token(token: str, remote_ip: str | None = None) -> bo
             detail="CAPTCHA verification is temporarily unavailable",
         ) from exc
 
+    if not isinstance(result, dict):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="CAPTCHA verification returned an invalid response",
+        )
+
     if result.get("success") is not True:
         return False
 
