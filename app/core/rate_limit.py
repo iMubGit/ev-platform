@@ -34,12 +34,13 @@ def get_client_ip(request: Request) -> str:
     guaranteed to pass through Cloudflare's edge. Never trust X-Forwarded-For.
     """
     if settings.trust_cloudflare_client_ip:
-        raw_ip = request.headers.get("cf-connecting-ip")
-        if raw_ip is None:
+        forwarded_ips = request.headers.getlist("cf-connecting-ip")
+        if len(forwarded_ips) != 1:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Client IP cannot be determined securely",
             )
+        raw_ip = forwarded_ips[0]
     else:
         raw_ip = request.client.host if request.client else None
         if raw_ip is None:

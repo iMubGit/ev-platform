@@ -67,6 +67,10 @@ def test_cloudflare_mode_accepts_ipv6(monkeypatch):
         [(b"cf-connecting-ip", b"not-an-ip")],
         [(b"cf-connecting-ip", b"203.0.113.1, 198.51.100.2")],
         [(b"cf-connecting-ip", b"")],
+        [
+            (b"cf-connecting-ip", b"203.0.113.1"),
+            (b"cf-connecting-ip", b"198.51.100.2"),
+        ],
     ],
 )
 def test_cloudflare_mode_fails_closed_for_missing_or_invalid_ip(

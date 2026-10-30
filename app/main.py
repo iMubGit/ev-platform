@@ -1,7 +1,13 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from app.interfaces.api.routes import chargers, sessions, telemetry, auth
+from app.interfaces.api.routes import (
+    auth,
+    chargers,
+    sessions,
+    staging_diagnostics,
+    telemetry,
+)
 from app.domain.exceptions import (
     EntityNotFoundError,
     BusinessRuleViolationError,
@@ -30,6 +36,7 @@ app.include_router(auth.router)
 app.include_router(chargers.router)
 app.include_router(sessions.router)
 app.include_router(telemetry.router)
+app.include_router(staging_diagnostics.router)
 
 
 @app.get("/health", tags=["Health"])

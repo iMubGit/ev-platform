@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     # to be Cloudflare. Otherwise use the direct TCP peer address.
     trust_cloudflare_client_ip: bool = False
 
+    # Temporary, staging-only diagnostic endpoint. Disabled by default.
+    staging_diagnostics_enabled: bool = False
+    staging_diagnostics_token: str | None = None
+
     # No built-in signing key: the operator must provide SECRET_KEY.
     secret_key: str = Field(min_length=32)
     # Only this explicitly supported signing algorithm is accepted.
