@@ -41,6 +41,16 @@ def _login_keys(request: Request, username: str) -> tuple[str, str]:
     )
 
 
+_GLOBAL_FAILED_KEY = "ev-platform:login:global-failed"
+_GLOBAL_FAILED_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+"""
+
+
 async def consume_login_attempt(request: Request, username: str) -> None:
     ip_key, identity_key = _login_keys(request, username)
 
@@ -51,6 +61,14 @@ async def consume_login_attempt(request: Request, username: str) -> None:
             socket_connect_timeout=2,
             socket_timeout=2,
         ) as redis:
+            global_failed = int(await redis.get(_GLOBAL_FAILED_KEY) or 0)
+            if global_failed >= settings.login_rate_limit_global_failed:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many failed login attempts across the platform. Try again later.",
+                    headers={"Retry-After": str(settings.login_rate_limit_window_seconds)},
+                )
+
             counts = await redis.eval(
                 _INCREMENT_SCRIPT,
                 2,
@@ -90,6 +108,28 @@ async def clear_login_attempts(request: Request, username: str) -> None:
             socket_timeout=2,
         ) as redis:
             await redis.delete(ip_key, identity_key)
+    except (RedisError, OSError, TimeoutError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Login protection is temporarily unavailable",
+        ) from exc
+
+
+async def record_failed_login() -> None:
+    """Record a failed credential check in the platform-wide counter."""
+    try:
+        async with Redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        ) as redis:
+            await redis.eval(
+                _GLOBAL_FAILED_SCRIPT,
+                1,
+                _GLOBAL_FAILED_KEY,
+                settings.login_rate_limit_window_seconds,
+            )
     except (RedisError, OSError, TimeoutError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
