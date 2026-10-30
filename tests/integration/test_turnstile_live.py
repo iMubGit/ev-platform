@@ -1,5 +1,6 @@
 import os
 
+import httpx
 import pytest
 
 from app.core import captcha
@@ -18,8 +19,22 @@ async def test_cloudflare_siteverify_accepts_official_test_token(monkeypatch):
     )
     monkeypatch.setattr(settings, "turnstile_expected_hostname", None)
 
-    # Cloudflare's official test keys return action="test", not "login".
-    # This verifies the real Siteverify request/response without weakening login.
+    # First inspect Cloudflare's actual response so a failure tells us
+    # whether the problem is the remote test fixture or our response handling.
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        response = await client.post(
+            captcha.TURNSTILE_VERIFY_URL,
+            data={
+                "secret": settings.turnstile_secret_key,
+                "response": DUMMY_TOKEN,
+            },
+        )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("success") is True, payload
+    assert payload.get("action") == "test", payload
+
+    # The application's own validator must accept the documented test action.
     assert await captcha.verify_turnstile_token(
         DUMMY_TOKEN,
         expected_action="test",
