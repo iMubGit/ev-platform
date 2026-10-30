@@ -371,6 +371,11 @@ async def test_successful_login_clears_identity_but_preserves_shared_ip_counter(
     from app.core import rate_limit
 
     FakeRedis.counters = {}
+    monkeypatch.setattr(
+        rate_limit.Redis,
+        "from_url",
+        lambda *args, **kwargs: FakeRedis(),
+    )
     password = "Correct-unit-test-password-42!"
     monkeypatch.setattr(settings, "admin_password_hash", hash_password(password))
     ip_client = AsyncClient(
