@@ -169,18 +169,12 @@ class FakeRedis:
         return self.counters.get(key)
 
     async def eval(self, script, number_of_keys, *args):
-        if number_of_keys == 1:
-            key, window = args
-            count = self.counters.get(key, 0) + 1
-            self.counters[key] = count
-            return count
-
-        ip_key, identity_key, window = args
-        ip_count = self.counters.get(ip_key, 0) + 1
-        identity_count = self.counters.get(identity_key, 0) + 1
-        self.counters[ip_key] = ip_count
-        self.counters[identity_key] = identity_count
-        return [ip_count, identity_count]
+        first_key, second_key, window = args
+        first_count = self.counters.get(first_key, 0) + 1
+        second_count = self.counters.get(second_key, 0) + 1
+        self.counters[first_key] = first_count
+        self.counters[second_key] = second_count
+        return [first_count, second_count]
 
     async def delete(self, *keys):
         for key in keys:
@@ -250,7 +244,9 @@ async def test_login_fails_closed_when_redis_is_unavailable(client, monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_global_failed_login_limit_applies_across_usernames(client, monkeypatch):
+async def test_global_failed_login_threshold_monitors_but_does_not_block(
+    client, monkeypatch
+):
     from app.core import rate_limit
 
     FakeRedis.counters = {}
@@ -259,14 +255,16 @@ async def test_global_failed_login_limit_applies_across_usernames(client, monkey
         "from_url",
         lambda *args, **kwargs: FakeRedis(),
     )
-    monkeypatch.setattr(settings, "login_rate_limit_global_failed", 3)
+    monkeypatch.setattr(settings, "login_rate_limit_global_alert", 3)
     monkeypatch.setattr(
         settings,
         "admin_password_hash",
         hash_password("Correct-unit-test-password-42!"),
     )
 
-    for index, username in enumerate(("first", "second", "third"), start=1):
+    for index, username in enumerate(
+        ("first", "second", "third", "fourth"), start=1
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=app, client=(f"192.0.2.{index}", 12345)),
             base_url="http://test",
@@ -275,17 +273,40 @@ async def test_global_failed_login_limit_applies_across_usernames(client, monkey
                 "/auth/token",
                 json={"username": username, "password": "wrong"},
             )
+        # Crossing the global alert threshold must not lock out later users.
         assert response.status_code == 401
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app, client=("192.0.2.4", 12345)),
-        base_url="http://test",
-    ) as new_ip_client:
-        blocked = await new_ip_client.post(
-            "/auth/token",
-            json={"username": "fourth", "password": "wrong"},
-        )
+    assert FakeRedis.counters[rate_limit._GLOBAL_FAILED_KEY] == 4
 
-    assert blocked.status_code == 429
-    assert blocked.headers["retry-after"] == "900"
-    assert FakeRedis.counters[rate_limit._GLOBAL_FAILED_KEY] == 3
+
+@pytest.mark.asyncio
+async def test_username_failure_monitor_counts_across_different_ips(
+    client, monkeypatch
+):
+    from app.core import rate_limit
+
+    FakeRedis.counters = {}
+    monkeypatch.setattr(
+        rate_limit.Redis,
+        "from_url",
+        lambda *args, **kwargs: FakeRedis(),
+    )
+    monkeypatch.setattr(settings, "login_rate_limit_username_alert", 3)
+    monkeypatch.setattr(
+        settings,
+        "admin_password_hash",
+        hash_password("Correct-unit-test-password-42!"),
+    )
+
+    for index in range(1, 4):
+        async with AsyncClient(
+            transport=ASGITransport(app=app, client=(f"198.51.100.{index}", 12345)),
+            base_url="http://test",
+        ) as ip_client:
+            response = await ip_client.post(
+                "/auth/token",
+                json={"username": "admin", "password": "wrong"},
+            )
+        assert response.status_code == 401
+
+    assert FakeRedis.counters[rate_limit._username_failure_key("admin")] == 3
