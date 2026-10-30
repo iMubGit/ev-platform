@@ -2,7 +2,11 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.core.rate_limit import clear_login_attempts, consume_login_attempt
+from app.core.rate_limit import (
+    clear_login_attempts,
+    consume_login_attempt,
+    record_failed_login,
+)
 from app.core.security import create_access_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -34,6 +38,7 @@ async def login(request: Request, credentials: LoginRequest):
         credentials.password,
         settings.admin_password_hash,
     ):
+        await record_failed_login()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
