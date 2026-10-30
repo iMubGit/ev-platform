@@ -26,15 +26,21 @@ return {ip_count, identity_count}
 """
 
 
-def _login_keys(request: Request, username: str) -> tuple[str, str]:
+def _client_ip(request: Request) -> str:
     # Use the direct connection address. Do not trust client-supplied
     # X-Forwarded-For headers unless a trusted-proxy setup is added.
-    client_ip = request.client.host if request.client else "unknown"
-    normalized_username = username.strip().casefold()
+    return request.client.host if request.client else "unknown"
 
-    ip_digest = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()
+
+def _ip_digest(request: Request) -> str:
+    return hashlib.sha256(_client_ip(request).encode("utf-8")).hexdigest()
+
+
+def _login_keys(request: Request, username: str) -> tuple[str, str]:
+    normalized_username = username.strip().casefold()
+    ip_digest = _ip_digest(request)
     identity_digest = hashlib.sha256(
-        f"{client_ip}:{normalized_username}".encode("utf-8")
+        f"{_client_ip(request)}:{normalized_username}".encode("utf-8")
     ).hexdigest()
 
     return (
@@ -99,6 +105,44 @@ async def consume_login_attempt(request: Request, username: str) -> bool:
         identity_count > settings.login_captcha_identity_threshold
         or ip_count > settings.login_captcha_ip_threshold
     )
+
+
+async def consume_captcha_verified_attempt(request: Request) -> None:
+    """Limit password checks that have already passed CAPTCHA verification."""
+    key = f"ev-platform:login:captcha-verified:{_ip_digest(request)}"
+    try:
+        async with Redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        ) as redis:
+            count = await redis.eval(
+                """
+                local count = redis.call('INCR', KEYS[1])
+                if count == 1 then
+                    redis.call('EXPIRE', KEYS[1], ARGV[1])
+                end
+                return count
+                """,
+                1,
+                key,
+                settings.login_captcha_verified_window_seconds,
+            )
+    except (RedisError, OSError, TimeoutError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Login protection is temporarily unavailable",
+        ) from exc
+
+    if int(count) > settings.login_captcha_verified_attempts_per_ip:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many CAPTCHA-verified login attempts from this IP. Try again later.",
+            headers={
+                "Retry-After": str(settings.login_captcha_verified_window_seconds)
+            },
+        )
 
 
 async def clear_login_attempts(request: Request, username: str) -> None:
