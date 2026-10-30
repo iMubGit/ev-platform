@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import Field
@@ -12,7 +13,8 @@ class Settings(BaseSettings):
 
     # No built-in signing key: the operator must provide SECRET_KEY.
     secret_key: str = Field(min_length=32)
-    algorithm: str = "HS256"
+    # Only this explicitly supported signing algorithm is accepted.
+    algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: int = 30
 
     # Login is disabled until an administrator provides a password hash.
