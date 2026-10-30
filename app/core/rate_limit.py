@@ -105,7 +105,7 @@ async def consume_login_attempt(request: Request, username: str) -> bool:
         )
 
     return (
-        identity_count > settings.login_rate_limit_per_identity
+        identity_count > settings.login_captcha_identity_threshold
         or ip_count > settings.login_captcha_ip_threshold
     )
 
