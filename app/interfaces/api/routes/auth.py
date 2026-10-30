@@ -5,6 +5,7 @@ from app.core.captcha import verify_turnstile_token
 from app.core.config import settings
 from app.core.rate_limit import (
     clear_login_attempts,
+    consume_captcha_verified_attempt,
     consume_login_attempt,
     record_failed_login,
 )
@@ -47,6 +48,9 @@ async def login(request: Request, credentials: LoginRequest):
                     "message": "CAPTCHA verification failed. Please try again.",
                 },
             )
+
+        # Count only tokens that Cloudflare has verified successfully.
+        await consume_captcha_verified_attempt(request)
 
     # Fail closed: no password is accepted until an admin hash is configured.
     if not settings.admin_password_hash:
