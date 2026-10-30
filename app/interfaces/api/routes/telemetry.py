@@ -6,6 +6,7 @@ from app.application.use_cases import (
     IngestTelemetryInput,
 )
 from app.domain.exceptions import TelemetryChargerNotFoundError
+from app.interfaces.api.dependencies import get_current_user
 from app.interfaces.api.schemas import (
     TelemetryIngestRequest,
     TelemetryIngestResponse,
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/telemetry", tags=["Telemetry"])
 @router.post("/", response_model=TelemetryIngestResponse, status_code=201)
 async def ingest_telemetry(
     request: TelemetryIngestRequest,
+    current_user: str = Depends(get_current_user),
     use_case: IngestTelemetryUseCase = Depends(get_ingest_telemetry_use_case),
 ):
     try:
