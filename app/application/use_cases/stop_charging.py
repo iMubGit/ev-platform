@@ -8,6 +8,7 @@ from app.domain.exceptions import ChargerNotFoundError, SessionNotFoundError
 @dataclass
 class StopChargingInput:
     session_id: UUID
+    user_id: UUID
     energy_kwh: float
 
 
@@ -32,7 +33,8 @@ class StopChargingUseCase:
     async def execute(self, input: StopChargingInput) -> StopChargingOutput:
         # 1. Fetch the session
         session = await self.session_repo.get_by_id(input.session_id)
-        if session is None:
+        if session is None or session.user_id != input.user_id:
+            # Do not reveal whether another user's session exists.
             raise SessionNotFoundError(
                 f"Session {input.session_id} not found"
             )
