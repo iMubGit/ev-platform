@@ -146,7 +146,9 @@ async def consume_captcha_verified_attempt(request: Request) -> None:
 
 
 async def clear_login_attempts(request: Request, username: str) -> None:
-    ip_key, identity_key = _login_keys(request, username)
+    # Clear only this username/IP pair. Preserve shared-IP and CAPTCHA-verified
+    # counters so one person's successful login cannot reset protection for others.
+    _, identity_key = _login_keys(request, username)
 
     try:
         async with Redis.from_url(
@@ -155,7 +157,7 @@ async def clear_login_attempts(request: Request, username: str) -> None:
             socket_connect_timeout=2,
             socket_timeout=2,
         ) as redis:
-            await redis.delete(ip_key, identity_key)
+            await redis.delete(identity_key)
     except (RedisError, OSError, TimeoutError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
