@@ -24,7 +24,7 @@ class TokenResponse(BaseModel):
 
 @router.post("/token", response_model=TokenResponse)
 async def login(request: Request, credentials: LoginRequest):
-    # Apply the Redis-backed limit before checking the password.
+    # Apply IP and IP/username limits before checking the password.
     await consume_login_attempt(request, credentials.username)
 
     # Fail closed: no password is accepted until an admin hash is configured.
@@ -38,7 +38,7 @@ async def login(request: Request, credentials: LoginRequest):
         credentials.password,
         settings.admin_password_hash,
     ):
-        await record_failed_login()
+        await record_failed_login(credentials.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
