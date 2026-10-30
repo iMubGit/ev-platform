@@ -23,6 +23,15 @@ def test_secret_key_must_be_provided():
         Settings(_env_file=None, _env_prefix="TEST_MISSING_SECRET_")
 
 
+def test_only_hs256_signing_algorithm_is_allowed():
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            secret_key="unit-test-signing-key-that-is-long-enough",
+            algorithm="none",
+        )
+
+
 PROTECTED_REQUESTS = [
     (
         "POST",
