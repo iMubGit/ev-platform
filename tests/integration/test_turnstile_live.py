@@ -47,10 +47,7 @@ async def test_cloudflare_siteverify_rejects_official_failing_test_token(monkeyp
     )
     monkeypatch.setattr(settings, "turnstile_expected_hostname", None)
 
-    assert await captcha.verify_turnstile_token(
-        DUMMY_TOKEN,
-        expected_action="test",
-    ) is False
+    assert await captcha.verify_turnstile_token(DUMMY_TOKEN) is False
 
 
 @pytest.mark.asyncio
