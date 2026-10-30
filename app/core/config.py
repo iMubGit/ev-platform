@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Login protection: fixed 15-minute window by default.
     # After this many attempts for one username/IP pair, require CAPTCHA.
-    login_rate_limit_per_identity: int = Field(default=5, ge=1)
+    login_captcha_identity_threshold: int = Field(default=5, ge=1)
     login_rate_limit_per_ip: int = Field(default=20, ge=1)
     login_captcha_ip_threshold: int = Field(default=10, ge=1)
     login_rate_limit_username_alert: int = Field(default=5, ge=1)
