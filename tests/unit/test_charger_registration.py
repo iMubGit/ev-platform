@@ -1,5 +1,6 @@
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.infrastructure.database.repositories import InMemoryChargerRepository
 from app.interfaces.api.routes.chargers import create_charger
@@ -33,3 +34,13 @@ async def test_registration_rejects_duplicate_serial_but_accepts_new_serial():
     assert second.serial_number == "CH-002"
     assert first.id != second.id
     assert len(await repo.list_all()) == 2
+
+
+@pytest.mark.parametrize("field", ["serial_number", "location"])
+@pytest.mark.parametrize("blank_value", ["", "   "])
+def test_registration_rejects_empty_or_whitespace_only_fields(field, blank_value):
+    values = {"serial_number": "CH-003", "location": "Osogbo"}
+    values[field] = blank_value
+
+    with pytest.raises(ValidationError):
+        ChargerCreateRequest(**values)
