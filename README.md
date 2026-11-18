@@ -51,7 +51,7 @@ python -m venv venv
 # macOS/Linux: source venv/bin/activate
 
 pip install -e .
-pip install pydantic-settings "python-jose[cryptography]" "pwdlib[bcrypt]" "bcrypt==4.0.1" httpx pytest pytest-asyncio
+pip install pydantic-settings "python-jose[cryptography]" "pwdlib[bcrypt]" httpx pytest pytest-asyncio
 
 # Create your local environment file
 cp .env.example .env
