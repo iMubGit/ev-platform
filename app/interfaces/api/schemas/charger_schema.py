@@ -1,5 +1,7 @@
-from pydantic import BaseModel
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+
 from app.domain.entities import ChargerStatus
 
 
@@ -14,5 +16,4 @@ class ChargerResponse(BaseModel):
     location: str
     status: ChargerStatus
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
