@@ -5,7 +5,7 @@ from typing import List
 from app.core.dependencies import get_charger_repo
 from app.domain.entities import Charger
 from app.infrastructure.database.repositories import InMemoryChargerRepository
-from app.interfaces.api.dependencies import get_current_user
+from app.interfaces.api.dependencies import get_current_user, require_admin
 from app.interfaces.api.schemas import ChargerCreateRequest, ChargerResponse
 
 router = APIRouter(prefix="/chargers", tags=["Chargers"])
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/chargers", tags=["Chargers"])
 @router.post("/", response_model=ChargerResponse, status_code=201)
 async def create_charger(
     request: ChargerCreateRequest,
-    current_user: str = Depends(get_current_user),
+    current_user: str = Depends(require_admin),
     repo: InMemoryChargerRepository = Depends(get_charger_repo),
 ):
     charger = Charger.create(
