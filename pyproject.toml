@@ -14,7 +14,6 @@ dependencies = [
     "httpx",
     "python-jose[cryptography]",
     "pwdlib[bcrypt]",
-    "bcrypt==4.0.1",
 ]
 
 [project.optional-dependencies]
