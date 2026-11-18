@@ -26,6 +26,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
           pip install pytest pytest-asyncio httpx
+          python -m pip check
 
       - name: Run tests
         run: pytest tests/unit/ -v
@@ -63,6 +64,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
           pip install pytest pytest-asyncio
+          python -m pip check
 
       - name: Check Redis and Cloudflare integration
         run: pytest tests/integration/ -v
