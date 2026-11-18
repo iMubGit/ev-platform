@@ -10,7 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      # Test-only key. Never reuse this value outside CI.
       SECRET_KEY: "ci-only-secret-key-for-tests-not-for-production-42"
 
     steps:
@@ -26,11 +25,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pydantic-settings pytest pytest-asyncio httpx "python-jose[cryptography]" "passlib[bcrypt]" "bcrypt==4.0.1"
+          pip install pytest pytest-asyncio httpx
 
       - name: Run tests
-        run: |
-          pytest tests/unit/ -v
+        run: pytest tests/unit/ -v
 
   security-integration:
     runs-on: ubuntu-latest
@@ -45,7 +43,6 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     env:
-      # Test-only values. These are public dummy credentials, never production secrets.
       SECRET_KEY: "ci-only-secret-key-for-tests-not-for-production-42"
       REDIS_URL: "redis://localhost:6379/15"
       TURNSTILE_TEST_PASS_SECRET: "1x0000000000000000000000000000000AA"
