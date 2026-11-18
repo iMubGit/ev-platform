@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+from app.core.config import settings
 from app.core.security import decode_access_token
 
 # Handle missing credentials ourselves so missing and invalid tokens both return 401.
@@ -40,3 +41,16 @@ def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def require_admin(current_user: str = Depends(get_current_user)) -> str:
+    """
+    Allow only the configured administrator to perform administrator-only actions.
+    A valid token belonging to another user receives 403.
+    """
+    if current_user != str(settings.admin_user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator permission required",
+        )
+    return current_user
