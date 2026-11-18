@@ -16,6 +16,13 @@ async def create_charger(
     request: ChargerCreateRequest,
     repo: InMemoryChargerRepository = Depends(get_charger_repo),
 ):
+    existing_charger = await repo.get_by_serial(request.serial_number)
+    if existing_charger is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Charger with this serial number already exists",
+        )
+
     charger = Charger.create(
         serial_number=request.serial_number,
         location=request.location,
