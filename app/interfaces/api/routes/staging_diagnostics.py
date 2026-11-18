@@ -55,7 +55,7 @@ async def diagnose_client_ip(
         expected_ip = str(ipaddress.ip_address(payload.expected_public_ip.strip()))
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="A valid expected public IP is required",
         ) from exc
 
