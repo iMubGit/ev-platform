@@ -34,7 +34,7 @@ Interfaces     → FastAPI routes, schemas, dependency injection
 | Layer | Technology |
 |---|---|
 | API | FastAPI + Pydantic |
-| Auth | python-jose + passlib (JWT) |
+| Auth | python-jose + pwdlib (bcrypt password hashing) |
 | Database | In-memory repositories (persistent database not yet connected) |
 | Testing | pytest + pytest-asyncio + HTTPX |
 | CI | GitHub Actions |
@@ -51,7 +51,7 @@ python -m venv venv
 # macOS/Linux: source venv/bin/activate
 
 pip install -e .
-pip install pydantic-settings "python-jose[cryptography]" "passlib[bcrypt]" "bcrypt==4.0.1" httpx pytest pytest-asyncio
+pip install pydantic-settings "python-jose[cryptography]" "pwdlib[bcrypt]" "bcrypt==4.0.1" httpx pytest pytest-asyncio
 
 # Create your local environment file
 cp .env.example .env
@@ -67,7 +67,7 @@ Before starting the API, edit `.env`:
    Put the generated value in `SECRET_KEY`. Keep it private and stable between restarts. Changing this key invalidates all tokens issued with the previous key.
 2. Generate an administrator password hash:
    ```bash
-   python -c "from passlib.context import CryptContext; print(CryptContext(schemes=['bcrypt']).hash('YOUR-STRONG-PASSWORD'))"
+   python -c "from pwdlib import PasswordHash; from pwdlib.hashers.bcrypt import BcryptHasher; print(PasswordHash((BcryptHasher(),)).hash('YOUR-STRONG-PASSWORD'))"
    ```
    Put the generated hash in `ADMIN_PASSWORD_HASH`. Set `ADMIN_USERNAME` and `ADMIN_USER_ID` as appropriate.
 
