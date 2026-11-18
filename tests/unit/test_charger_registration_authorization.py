@@ -57,3 +57,21 @@ async def test_authenticated_non_admin_cannot_register_charger():
     assert response.json()["detail"] == "Administrator permission required"
     assert after_ids == before_ids
     assert all(charger.serial_number != serial_number for charger in after)
+
+@pytest.mark.asyncio
+async def test_invalid_charger_request_keeps_fastapi_422_response():
+    token = create_access_token(subject=str(settings.admin_user_id))
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/chargers/",
+            json={"serial_number": "MISSING-LOCATION"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]
+
